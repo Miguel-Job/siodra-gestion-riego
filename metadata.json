@@ -1,0 +1,6 @@
+{
+  "name": "SIODRA — Sistema Integrado de Operación y Distribución de Recursos Hídricos Agrarios",
+  "description": "Plataforma web técnica e integral para la gestión de usuarios, predios, derechos de agua (DUA), infraestructura hidráulica, distribución (PDA), cobranza y catastro GIS para Organizaciones de Usuarios de Agua del Perú.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
