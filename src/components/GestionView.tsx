@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  * 
  * SIODRA — Área Funcional 1: Gestión OUA
- * Padrón Oficial de 20 Usuarios OUA con Control de Turno Semanal (1 Turno/Semana)
+ * Padrón Oficial de Usuarios OUA con Control de Turno Semanal (1 Turno/Semana)
+ * y Validación Obligatoria de Entrelazamiento Predio / UC con Área Bajo Riego.
  */
 
 import React, { useState, useMemo } from 'react';
@@ -25,7 +26,14 @@ import {
   AlertTriangle,
   Play,
   Sparkles,
-  CheckCircle
+  CheckCircle,
+  Lock,
+  Unlock,
+  Layers,
+  MapPin,
+  HelpCircle,
+  X,
+  UserPlus
 } from 'lucide-react';
 import {
   UsuarioAgrario,
@@ -66,14 +74,30 @@ export const GestionView: React.FC<GestionViewProps> = ({
   const [subTab, setSubTab] = useState<'usuarios' | 'predios' | 'dua' | 'cultivos'>('usuarios');
   const [searchTerm, setSearchTerm] = useState('');
   const [showNuevoUsuarioModal, setShowNuevoUsuarioModal] = useState(false);
-  const [testNotification, setTestNotification] = useState<string | null>(null);
+  const [notificacionToast, setNotificacionToast] = useState<string | null>(null);
 
-  // Local state for registered users
+  // Local state for registered users and cadastral land parcels (Predios/UC)
   const [usuarios, setUsuarios] = useState<UsuarioAgrario[]>(USUARIOS_DEMO);
+  const [prediosLista, setPrediosLista] = useState<PredioCatastral[]>(PREDIOS_DEMO);
+
+  // Form states for new user modal
   const [nuevoNombre, setNuevoNombre] = useState('');
   const [nuevoApellido, setNuevoApellido] = useState('');
+  const [nuevoTipoDoc, setNuevoTipoDoc] = useState<'DNI' | 'RUC'>('DNI');
   const [nuevoDni, setNuevoDni] = useState('');
   const [nuevoTelefono, setNuevoTelefono] = useState('');
+
+  // Entrelazamiento Catastral: Predio/UC y Área Bajo Riego
+  const [modoPredio, setModoPredio] = useState<'existente' | 'nuevo'>('existente');
+  const [selectedPredioId, setSelectedPredioId] = useState<string>('');
+  const [areaBajoRiegoInput, setAreaBajoRiegoInput] = useState<string>('');
+  
+  // States if registering a new cadastral unit (UC)
+  const [nuevaUcCodigo, setNuevaUcCodigo] = useState(`UC-048${21 + usuarios.length}`);
+  const [nuevoNombrePredio, setNuevoNombrePredio] = useState('');
+  const [nuevoAreaTotalHa, setNuevoAreaTotalHa] = useState<number>(10.0);
+  const [nuevaTomaId, setNuevaTomaId] = useState<string>('toma-001');
+  const [nuevoCultivoId, setNuevoCultivoId] = useState<string>('cult-001');
 
   // Current active week info
   const semanaActual = useMemo(() => getSemanaInfo('2026-09-02'), []);
@@ -97,6 +121,160 @@ export const GestionView: React.FC<GestionViewProps> = ({
     return { conTurno, sinTurno, porcentaje };
   }, [usuarios, turnosPorUsuarioEnSemana]);
 
+  // Derived information for the selected / active predio
+  const predioExistente = useMemo(() => {
+    return prediosLista.find(p => p.id === selectedPredioId);
+  }, [prediosLista, selectedPredioId]);
+
+  const superficieTotalHa = useMemo(() => {
+    if (modoPredio === 'existente') {
+      return predioExistente?.areaTotalHa || 0;
+    }
+    return Number(nuevoAreaTotalHa) || 0;
+  }, [modoPredio, predioExistente, nuevoAreaTotalHa]);
+
+  const ucNombreResumen = useMemo(() => {
+    if (modoPredio === 'existente') {
+      return predioExistente ? `${predioExistente.unidadCatastral} — ${predioExistente.nombrePredio}` : '';
+    }
+    return nuevaUcCodigo.trim() && nuevoNombrePredio.trim() ? `${nuevaUcCodigo} — ${nuevoNombrePredio}` : '';
+  }, [modoPredio, predioExistente, nuevaUcCodigo, nuevoNombrePredio]);
+
+  // Validation rules for interlocking: UC must be valid AND area under irrigation must be > 0 and <= total area
+  const tieneUcValida = useMemo(() => {
+    if (modoPredio === 'existente') {
+      return Boolean(selectedPredioId && selectedPredioId !== '');
+    }
+    return Boolean(nuevaUcCodigo.trim() && nuevoNombrePredio.trim() && nuevoAreaTotalHa > 0);
+  }, [modoPredio, selectedPredioId, nuevaUcCodigo, nuevoNombrePredio, nuevoAreaTotalHa]);
+
+  const areaRiegoNumero = useMemo(() => {
+    const val = Number(areaBajoRiegoInput);
+    return isNaN(val) ? 0 : val;
+  }, [areaBajoRiegoInput]);
+
+  const tieneAreaRiegoValida = useMemo(() => {
+    if (!tieneUcValida) return false;
+    if (areaRiegoNumero <= 0) return false;
+    if (superficieTotalHa > 0 && areaRiegoNumero > superficieTotalHa) return false;
+    return true;
+  }, [tieneUcValida, areaRiegoNumero, superficieTotalHa]);
+
+  const entrelazamientoValido = tieneUcValida && tieneAreaRiegoValida;
+
+  const puedeAperturarUsuario = useMemo(() => {
+    return Boolean(
+      nuevoNombre.trim() &&
+      nuevoApellido.trim() &&
+      nuevoDni.trim().length >= 8 &&
+      entrelazamientoValido
+    );
+  }, [nuevoNombre, nuevoApellido, nuevoDni, entrelazamientoValido]);
+
+  // Percentage of area under irrigation
+  const porcentajeAprovechamiento = useMemo(() => {
+    if (superficieTotalHa <= 0 || areaRiegoNumero <= 0) return 0;
+    return Math.min(100, Math.round((areaRiegoNumero / superficieTotalHa) * 100));
+  }, [superficieTotalHa, areaRiegoNumero]);
+
+  // Reset form handler
+  const resetFormulario = () => {
+    setNuevoNombre('');
+    setNuevoApellido('');
+    setNuevoTipoDoc('DNI');
+    setNuevoDni('');
+    setNuevoTelefono('');
+    setSelectedPredioId('');
+    setAreaBajoRiegoInput('');
+    setModoPredio('existente');
+    setNuevaUcCodigo(`UC-048${21 + usuarios.length}`);
+    setNuevoNombrePredio('');
+    setNuevoAreaTotalHa(10.0);
+  };
+
+  const handleSeleccionarPredioExistente = (predioId: string) => {
+    setSelectedPredioId(predioId);
+    const p = prediosLista.find(item => item.id === predioId);
+    if (p) {
+      // Pre-fill area under irrigation with the parcel's current registered area
+      setAreaBajoRiegoInput(String(p.areaBajoRiegoHa));
+    } else {
+      setAreaBajoRiegoInput('');
+    }
+  };
+
+  const handleCrearUsuario = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!puedeAperturarUsuario) return;
+
+    const newUserId = `usr-${Date.now()}`;
+    const newCodigoUsuario = `OUA-DEMO-${String(usuarios.length + 1).padStart(3, '0')}`;
+    let predioFinalId = selectedPredioId;
+
+    // Handle cadastral parcel linkage
+    if (modoPredio === 'nuevo') {
+      const newPredioId = `pred-${Date.now()}`;
+      predioFinalId = newPredioId;
+      const nuevoPredio: PredioCatastral = {
+        id: newPredioId,
+        codigoPredio: `PRD-2026-${String(prediosLista.length + 1).padStart(3, '0')}`,
+        nombrePredio: nuevoNombrePredio.trim(),
+        unidadCatastral: nuevaUcCodigo.trim().toUpperCase(),
+        usuarioId: newUserId,
+        sectorId: 'sec-001',
+        areaTotalHa: Number(nuevoAreaTotalHa),
+        areaBajoRiegoHa: areaRiegoNumero,
+        cultivoId: nuevoCultivoId,
+        duaId: 'dua-001',
+        tomaId: nuevaTomaId,
+        conduccionId: 'cond-002',
+        coordenadasUTM: {
+          este: 258200 + (prediosLista.length * 150),
+          norte: 8725100 + (prediosLista.length * 150),
+          zona: '18S'
+        },
+        estadoCobranza: 'Al Día'
+      };
+      setPrediosLista([nuevoPredio, ...prediosLista]);
+    } else {
+      // Update existing parcel with new user assignment and updated irrigated area
+      setPrediosLista(prev =>
+        prev.map(p =>
+          p.id === selectedPredioId
+            ? { ...p, usuarioId: newUserId, areaBajoRiegoHa: areaRiegoNumero }
+            : p
+        )
+      );
+    }
+
+    const newUser: UsuarioAgrario = {
+      id: newUserId,
+      codigoUsuario: newCodigoUsuario,
+      nombres: nuevoNombre.trim(),
+      apellidos: nuevoApellido.trim(),
+      tipoDocumento: nuevoTipoDoc,
+      numeroDocumento: nuevoDni.trim(),
+      telefono: nuevoTelefono.trim() || '999-000-111',
+      comisionId: selectedAmbito.id,
+      condicion: 'Activo',
+      fechaRegistro: new Date().toISOString().split('T')[0],
+      avatarInitials: `${nuevoNombre.trim()[0]}${nuevoApellido.trim()[0]}`.toUpperCase(),
+      prediosIds: [predioFinalId]
+    };
+
+    setUsuarios([newUser, ...usuarios]);
+    setShowNuevoUsuarioModal(false);
+    resetFormulario();
+
+    setNotificacionToast(
+      `¡Usuario ${newUser.nombres} ${newUser.apellidos} aperturado con éxito! Vinculado a ${ucNombreResumen} con ${areaRiegoNumero} ha bajo riego.`
+    );
+    setTimeout(() => setNotificacionToast(null), 5000);
+
+    const ficha = getFichaIntegralPorUsuario(newUser.id);
+    if (ficha) onSelectFicha(ficha);
+  };
+
   const filteredUsers = usuarios.filter(u =>
     u.nombres.toLowerCase().includes(searchTerm.toLowerCase()) ||
     u.apellidos.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -104,7 +282,7 @@ export const GestionView: React.FC<GestionViewProps> = ({
     u.numeroDocumento.includes(searchTerm)
   );
 
-  const filteredPredios = PREDIOS_DEMO.filter(p =>
+  const filteredPredios = prediosLista.filter(p =>
     p.nombrePredio.toLowerCase().includes(searchTerm.toLowerCase()) ||
     p.unidadCatastral.toLowerCase().includes(searchTerm.toLowerCase()) ||
     p.codigoPredio.toLowerCase().includes(searchTerm.toLowerCase())
@@ -114,36 +292,6 @@ export const GestionView: React.FC<GestionViewProps> = ({
     d.codigoDUA.toLowerCase().includes(searchTerm.toLowerCase()) ||
     d.resolucionDirectoral.toLowerCase().includes(searchTerm.toLowerCase())
   );
-
-  const handleCrearUsuario = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!nuevoNombre || !nuevoApellido || !nuevoDni) return;
-
-    const newUser: UsuarioAgrario = {
-      id: `usr-${Date.now()}`,
-      codigoUsuario: `OUA-DEMO-${String(usuarios.length + 1).padStart(3, '0')}`,
-      nombres: nuevoNombre,
-      apellidos: nuevoApellido,
-      tipoDocumento: 'DNI',
-      numeroDocumento: nuevoDni,
-      telefono: nuevoTelefono || '999-000-111',
-      comisionId: selectedAmbito.id,
-      condicion: 'Activo',
-      fechaRegistro: new Date().toISOString().split('T')[0],
-      avatarInitials: `${nuevoNombre[0]}${nuevoApellido[0]}`.toUpperCase(),
-      prediosIds: ['pred-001']
-    };
-
-    setUsuarios([newUser, ...usuarios]);
-    setShowNuevoUsuarioModal(false);
-    setNuevoNombre('');
-    setNuevoApellido('');
-    setNuevoDni('');
-    setNuevoTelefono('');
-
-    const ficha = getFichaIntegralPorUsuario(newUser.id);
-    if (ficha) onSelectFicha(ficha);
-  };
 
   const triggerTestRuleBlock = () => {
     // Victoriano Ramos already has a turn this week (Mié 02 Set)
@@ -161,6 +309,22 @@ export const GestionView: React.FC<GestionViewProps> = ({
 
   return (
     <div className="space-y-5">
+      {/* Dynamic Notification Toast */}
+      {notificacionToast && (
+        <div className="p-3.5 rounded-2xl bg-emerald-900 text-white shadow-lg flex items-center justify-between animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-center gap-2.5 text-xs font-semibold">
+            <CheckCircle2 className="w-4 h-4 text-emerald-300 shrink-0" />
+            <span>{notificacionToast}</span>
+          </div>
+          <button
+            onClick={() => setNotificacionToast(null)}
+            className="text-emerald-200 hover:text-white text-xs font-bold px-2 py-0.5 rounded-lg hover:bg-emerald-800"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Header Banner */}
       <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div>
@@ -172,11 +336,11 @@ export const GestionView: React.FC<GestionViewProps> = ({
               Área Funcional 1: Gestión OUA
             </h1>
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-              Padrón 20/20 Usuarios OUA
+              Padrón {usuarios.length} Usuarios OUA
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            "¿Quién utiliza el agua, en qué predio y bajo qué condiciones?" • Padrón de 20 Usuarios con Rol Semanal (1 Turno/Semana)
+            "¿Quién utiliza el agua, en qué predio y bajo qué condiciones?" • Padrón con Entrelazamiento Catastral Obligatorio y Rol Semanal
           </p>
         </div>
 
@@ -199,7 +363,7 @@ export const GestionView: React.FC<GestionViewProps> = ({
             }`}
           >
             <Home className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Predios & UC ({PREDIOS_DEMO.length})</span>
+            <span>Predios & UC ({prediosLista.length})</span>
           </button>
 
           <button
@@ -241,7 +405,7 @@ export const GestionView: React.FC<GestionViewProps> = ({
                 </span>
               </div>
               <p className="text-xs text-sky-200">
-                Padrón activo con 20 usuarios. Cada usuario debe solicitar o recibir agua exactamente una vez por semana.
+                Padrón activo con {usuarios.length} usuarios. Cada usuario debe solicitar o recibir agua exactamente una vez por semana.
               </p>
             </div>
           </div>
@@ -288,7 +452,7 @@ export const GestionView: React.FC<GestionViewProps> = ({
               type="text"
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              placeholder={`Buscar en ${subTab} (ej. Ramos, Palpa, DUA, DNI)...`}
+              placeholder={`Buscar en ${subTab} (ej. Ramos, Palpa, DUA, DNI, UC)...`}
               className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
             />
           </div>
@@ -296,17 +460,20 @@ export const GestionView: React.FC<GestionViewProps> = ({
           {subTab === 'usuarios' && (
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setShowNuevoUsuarioModal(true)}
+                onClick={() => {
+                  resetFormulario();
+                  setShowNuevoUsuarioModal(true);
+                }}
                 className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold self-end sm:self-auto transition-colors shadow-xs"
               >
-                <Plus className="w-3.5 h-3.5" />
+                <UserPlus className="w-3.5 h-3.5" />
                 <span>Registrar Nuevo Usuario OUA</span>
               </button>
             </div>
           )}
         </div>
 
-        {/* Tab 1: Usuarios (Padrón de 20 Usuarios) */}
+        {/* Tab 1: Usuarios */}
         {subTab === 'usuarios' && (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
@@ -314,7 +481,7 @@ export const GestionView: React.FC<GestionViewProps> = ({
                 <tr className="text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
                   <th className="pb-2">CÓDIGO & USUARIO</th>
                   <th className="pb-2">DOC. IDENTIDAD</th>
-                  <th className="pb-2">PREDIO ASOCIADO</th>
+                  <th className="pb-2">PREDIO & UC ENTLAZADA</th>
                   <th className="pb-2">ÁREA RIEGO</th>
                   <th className="pb-2">TURNO SEMANAL (1/SEM)</th>
                   <th className="pb-2">ESTADO</th>
@@ -323,9 +490,9 @@ export const GestionView: React.FC<GestionViewProps> = ({
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredUsers.map(u => {
-                  const predios = PREDIOS_DEMO.filter(p => p.usuarioId === u.id);
-                  const predio = predios[0] || PREDIOS_DEMO[0];
-                  const totalRiego = predios.reduce((acc, p) => acc + p.areaBajoRiegoHa, 0) || predio.areaBajoRiegoHa;
+                  const prediosUsuario = prediosLista.filter(p => p.usuarioId === u.id);
+                  const predio = prediosUsuario[0] || prediosLista[0];
+                  const totalRiego = prediosUsuario.reduce((acc, p) => acc + p.areaBajoRiegoHa, 0) || predio.areaBajoRiegoHa;
                   const turnoSemanal = turnosPorUsuarioEnSemana.get(u.id);
 
                   return (
@@ -364,7 +531,7 @@ export const GestionView: React.FC<GestionViewProps> = ({
 
                       <td className="py-3">
                         <span className="font-medium text-slate-800">{predio.nombrePredio}</span>
-                        <p className="text-[10px] text-slate-500 font-mono">{predio.unidadCatastral}</p>
+                        <p className="text-[10px] text-sky-800 font-mono font-bold">{predio.unidadCatastral}</p>
                       </td>
 
                       <td className="py-3 font-mono font-bold text-slate-800">
@@ -461,7 +628,7 @@ export const GestionView: React.FC<GestionViewProps> = ({
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredPredios.map(p => {
-                  const user = USUARIOS_DEMO.find(u => u.id === p.usuarioId) || USUARIOS_DEMO[0];
+                  const user = usuarios.find(u => u.id === p.usuarioId) || usuarios[0];
                   const toma = TOMAS_DEMO.find(t => t.id === p.tomaId) || TOMAS_DEMO[0];
                   const cultivo = CULTIVOS_DEMO.find(c => c.id === p.cultivoId) || CULTIVOS_DEMO[0];
 
@@ -469,15 +636,15 @@ export const GestionView: React.FC<GestionViewProps> = ({
                     <tr key={p.id} className="hover:bg-slate-50 transition-colors">
                       <td className="py-3">
                         <span className="font-bold text-slate-900">{p.nombrePredio}</span>
-                        <p className="text-[10px] font-mono text-slate-500">{p.unidadCatastral}</p>
+                        <p className="text-[10px] font-mono text-sky-800 font-bold">{p.unidadCatastral}</p>
                       </td>
                       <td className="py-3">
                         <span className="font-semibold text-slate-800">{user.nombres} {user.apellidos}</span>
                         <p className="text-[10px] font-mono text-slate-500">{user.codigoUsuario}</p>
                       </td>
                       <td className="py-3 font-mono">
-                        <strong className="text-slate-900">{p.areaBajoRiegoHa} ha</strong>
-                        <span className="text-slate-400 text-[10px]"> / {p.areaTotalHa} ha</span>
+                        <strong className="text-slate-900">{p.areaBajoRiegoHa} ha bajo riego</strong>
+                        <span className="text-slate-400 text-[10px]"> / {p.areaTotalHa} ha total</span>
                       </td>
                       <td className="py-3">
                         <span className="font-semibold text-slate-800">{cultivo.nombre}</span>
@@ -533,7 +700,7 @@ export const GestionView: React.FC<GestionViewProps> = ({
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredDuas.map(d => {
-                  const user = USUARIOS_DEMO.find(u => u.id === d.usuarioId) || USUARIOS_DEMO[0];
+                  const user = usuarios.find(u => u.id === d.usuarioId) || usuarios[0];
                   const saldo = d.volumenAnualAsignadoM3 - d.volumenConsumidoCampañaM3;
                   const pct = Math.round((d.volumenConsumidoCampañaM3 / d.volumenAnualAsignadoM3) * 100);
 
@@ -597,82 +764,414 @@ export const GestionView: React.FC<GestionViewProps> = ({
         )}
       </div>
 
-      {/* Modal: Registrar Nuevo Usuario OUA */}
+      {/* Modal: Aperturar Nuevo Usuario OUA con Entrelazamiento Catastral */}
       {showNuevoUsuarioModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95 max-h-[92vh] overflow-y-auto">
+            {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-sm font-bold text-slate-900">Registrar Nuevo Usuario OUA</h3>
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                  OUA
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    Apertura de Nuevo Usuario Agrario
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-800">
+                      Entrelazamiento Catastral
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Registro en Padrón Oficial con vinculación obligatoria de Predio (UC) y Área Bajo Riego
+                  </p>
+                </div>
+              </div>
               <button
-                onClick={() => setShowNuevoUsuarioModal(false)}
-                className="text-slate-400 hover:text-slate-700"
+                onClick={() => {
+                  setShowNuevoUsuarioModal(false);
+                  resetFormulario();
+                }}
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg"
               >
-                ✕
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleCrearUsuario} className="space-y-3 text-xs">
-              <div>
-                <label className="font-semibold text-slate-700 block mb-1">Nombres</label>
-                <input
-                  type="text"
-                  required
-                  value={nuevoNombre}
-                  onChange={e => setNuevoNombre(e.target.value)}
-                  placeholder="Ej. Juan Andrés"
-                  className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 focus:outline-none"
-                />
-              </div>
+            <form onSubmit={handleCrearUsuario} className="space-y-4 text-xs">
+              {/* Sección 1: Datos Personales del Usuario */}
+              <div className="space-y-2.5">
+                <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5 text-sky-600" />
+                  1. Identificación del Usuario Agrario
+                </span>
 
-              <div>
-                <label className="font-semibold text-slate-700 block mb-1">Apellidos</label>
-                <input
-                  type="text"
-                  required
-                  value={nuevoApellido}
-                  onChange={e => setNuevoApellido(e.target.value)}
-                  placeholder="Ej. Quispe Morales"
-                  className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 focus:outline-none"
-                />
-              </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">Nombres *</label>
+                    <input
+                      type="text"
+                      required
+                      value={nuevoNombre}
+                      onChange={e => setNuevoNombre(e.target.value)}
+                      placeholder="Ej. Juan Andrés"
+                      className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500/20 text-slate-900 font-medium"
+                    />
+                  </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1">DNI / RUC</label>
-                  <input
-                    type="text"
-                    required
-                    value={nuevoDni}
-                    onChange={e => setNuevoDni(e.target.value)}
-                    placeholder="8 dígitos"
-                    className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 focus:outline-none"
-                  />
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">Apellidos *</label>
+                    <input
+                      type="text"
+                      required
+                      value={nuevoApellido}
+                      onChange={e => setNuevoApellido(e.target.value)}
+                      placeholder="Ej. Quispe Morales"
+                      className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500/20 text-slate-900 font-medium"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Teléfono</label>
-                  <input
-                    type="text"
-                    value={nuevoTelefono}
-                    onChange={e => setNuevoTelefono(e.target.value)}
-                    placeholder="999-000-000"
-                    className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 focus:outline-none"
-                  />
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">Tipo Documento</label>
+                    <select
+                      value={nuevoTipoDoc}
+                      onChange={e => setNuevoTipoDoc(e.target.value as 'DNI' | 'RUC')}
+                      className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 focus:outline-none text-slate-800 font-medium"
+                    >
+                      <option value="DNI">DNI (8 dígitos)</option>
+                      <option value="RUC">RUC (11 dígitos)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">N.° Documento *</label>
+                    <input
+                      type="text"
+                      required
+                      value={nuevoDni}
+                      onChange={e => setNuevoDni(e.target.value)}
+                      placeholder={nuevoTipoDoc === 'DNI' ? '8 dígitos' : '11 dígitos'}
+                      maxLength={nuevoTipoDoc === 'DNI' ? 8 : 11}
+                      className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 focus:outline-none font-mono text-slate-900 font-semibold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">Teléfono / Celular</label>
+                    <input
+                      type="text"
+                      value={nuevoTelefono}
+                      onChange={e => setNuevoTelefono(e.target.value)}
+                      placeholder="999-000-000"
+                      className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 focus:outline-none text-slate-800 font-mono"
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="pt-2 flex items-center justify-end gap-2">
+              {/* Sección 2: Entrelazamiento Catastral Obligatorio */}
+              <div className="space-y-3 p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
+                    <Home className="w-3.5 h-3.5 text-emerald-600" />
+                    2. Predio / Unidad Catastral (UC) Asignada *
+                  </span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-800">
+                    Requisito de Apertura
+                  </span>
+                </div>
+
+                {/* Sub-selector: Asociar Existente vs Registrar Nueva UC */}
+                <div className="flex items-center gap-2 p-1 bg-white rounded-xl border border-slate-200 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setModoPredio('existente');
+                      setSelectedPredioId('');
+                      setAreaBajoRiegoInput('');
+                    }}
+                    className={`flex-1 py-1.5 rounded-lg font-semibold transition-colors ${
+                      modoPredio === 'existente' ? 'bg-slate-900 text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Vincular a Unidad Catastral Existente ({prediosLista.length} en base)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setModoPredio('nuevo');
+                      setSelectedPredioId('');
+                      setAreaBajoRiegoInput('8.0');
+                    }}
+                    className={`flex-1 py-1.5 rounded-lg font-semibold transition-colors ${
+                      modoPredio === 'nuevo' ? 'bg-slate-900 text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    + Registrar Nueva Unidad Catastral
+                  </button>
+                </div>
+
+                {/* Caso A: Seleccionar Predio / UC Existente */}
+                {modoPredio === 'existente' && (
+                  <div className="space-y-2">
+                    <label className="font-semibold text-slate-700 block">
+                      Seleccionar Predio / Unidad Catastral (UC) correspondiente *
+                    </label>
+                    <select
+                      value={selectedPredioId}
+                      onChange={e => handleSeleccionarPredioExistente(e.target.value)}
+                      className="w-full px-3 py-2 bg-white rounded-xl border border-slate-200 font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                    >
+                      <option value="">-- Seleccione la Unidad Catastral (UC) a vincular --</option>
+                      {prediosLista.map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.unidadCatastral} — {p.nombrePredio} (Área total: {p.areaTotalHa} ha)
+                        </option>
+                      ))}
+                    </select>
+
+                    {predioExistente && (
+                      <div className="p-2.5 bg-white rounded-xl border border-slate-200 text-[11px] grid grid-cols-3 gap-2">
+                        <div>
+                          <span className="text-slate-400 block text-[10px]">PREDIO:</span>
+                          <strong className="text-slate-800">{predioExistente.nombrePredio}</strong>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block text-[10px]">SUPERFICIE TOTAL:</span>
+                          <strong className="font-mono text-slate-800">{predioExistente.areaTotalHa} ha</strong>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block text-[10px]">TOMA DE ENTREGA:</span>
+                          <strong className="font-mono text-sky-900">{predioExistente.tomaId.toUpperCase()}</strong>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Caso B: Registrar Nueva UC */}
+                {modoPredio === 'nuevo' && (
+                  <div className="space-y-2.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <div>
+                        <label className="font-semibold text-slate-700 block mb-1">Código Unidad Catastral (UC) *</label>
+                        <input
+                          type="text"
+                          required
+                          value={nuevaUcCodigo}
+                          onChange={e => setNuevaUcCodigo(e.target.value)}
+                          placeholder="Ej. UC-04841"
+                          className="w-full px-3 py-2 bg-white rounded-xl border border-slate-200 font-mono font-bold text-sky-900 uppercase"
+                        />
+                      </div>
+                      <div>
+                        <label className="font-semibold text-slate-700 block mb-1">Nombre del Predio / Parcela *</label>
+                        <input
+                          type="text"
+                          required
+                          value={nuevoNombrePredio}
+                          onChange={e => setNuevoNombrePredio(e.target.value)}
+                          placeholder="Ej. Parcela Santa Rosa"
+                          className="w-full px-3 py-2 bg-white rounded-xl border border-slate-200 font-medium text-slate-900"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      <div>
+                        <label className="font-semibold text-slate-700 block mb-1">Área Total del Predio (ha) *</label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="0.5"
+                          required
+                          value={nuevoAreaTotalHa}
+                          onChange={e => setNuevoAreaTotalHa(Number(e.target.value) || 0)}
+                          className="w-full px-3 py-2 bg-white rounded-xl border border-slate-200 font-mono font-bold text-slate-900"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="font-semibold text-slate-700 block mb-1">Toma de Entrega</label>
+                        <select
+                          value={nuevaTomaId}
+                          onChange={e => setNuevaTomaId(e.target.value)}
+                          className="w-full px-3 py-2 bg-white rounded-xl border border-slate-200 font-mono text-slate-800"
+                        >
+                          {TOMAS_DEMO.map(t => (
+                            <option key={t.id} value={t.id}>
+                              {t.codigoToma} — {t.nombre}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="font-semibold text-slate-700 block mb-1">Cultivo Proyectado</label>
+                        <select
+                          value={nuevoCultivoId}
+                          onChange={e => setNuevoCultivoId(e.target.value)}
+                          className="w-full px-3 py-2 bg-white rounded-xl border border-slate-200 text-slate-800"
+                        >
+                          {CULTIVOS_DEMO.map(c => (
+                            <option key={c.id} value={c.id}>
+                              {c.nombre} ({c.moduloRiegoLpsHa} L/s/ha)
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Campo Entrelazado: Área Bajo Riego (ha) */}
+                <div className="pt-2 border-t border-slate-200 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <Droplet className="w-3.5 h-3.5 text-sky-600" />
+                      <span>3. Área Bajo Riego (ha) según Predio / UC *</span>
+                    </label>
+                    <span className="text-[10px] font-mono text-slate-500">
+                      Entrelazado con UC ({superficieTotalHa > 0 ? `Máx. ${superficieTotalHa} ha` : 'Pendiente UC'})
+                    </span>
+                  </div>
+
+                  <div className="relative">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      max={superficieTotalHa > 0 ? superficieTotalHa : undefined}
+                      disabled={!tieneUcValida}
+                      value={areaBajoRiegoInput}
+                      onChange={e => setAreaBajoRiegoInput(e.target.value)}
+                      placeholder={
+                        tieneUcValida
+                          ? `Ingrese superficie bajo riego (ej. ${superficieTotalHa > 0 ? Math.min(superficieTotalHa, 8.5) : 8.5})`
+                          : 'Primero seleccione o defina una Unidad Catastral (UC) válida'
+                      }
+                      className={`w-full px-3.5 py-2.5 rounded-xl border font-mono font-bold text-sm transition-colors ${
+                        !tieneUcValida
+                          ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed'
+                          : tieneAreaRiegoValida
+                          ? 'bg-white border-emerald-300 text-slate-900 ring-2 ring-emerald-500/20'
+                          : 'bg-white border-amber-300 text-slate-900'
+                      }`}
+                    />
+                    <span className="absolute right-3 top-2.5 font-bold text-xs text-slate-400 font-mono">
+                      ha
+                    </span>
+                  </div>
+
+                  {/* Dynamic Area Indicator */}
+                  {tieneUcValida && (
+                    <div className="flex items-center justify-between text-[11px] pt-1 text-slate-600">
+                      <span>
+                        Superficie Total del Predio:{' '}
+                        <strong className="font-mono text-slate-900">{superficieTotalHa} ha</strong>
+                      </span>
+                      {tieneAreaRiegoValida && (
+                        <span className="font-bold text-emerald-700 font-mono">
+                          {areaRiegoNumero} ha bajo riego ({porcentajeAprovechamiento}% aprovechamiento)
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {tieneUcValida && areaRiegoNumero > superficieTotalHa && superficieTotalHa > 0 && (
+                    <p className="text-[11px] font-bold text-rose-600">
+                      ⚠️ El área bajo riego ({areaRiegoNumero} ha) no puede exceder el área total del predio ({superficieTotalHa} ha).
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* NOTA DE RESTRICCIÓN OPERATIVA INSTITUCIONAL */}
+              {!entrelazamientoValido ? (
+                <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-rose-900 space-y-2">
+                  <div className="flex items-start gap-2.5">
+                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <span className="font-bold text-[11px] uppercase tracking-wide text-rose-800 flex items-center gap-1.5">
+                        <Lock className="w-3.5 h-3.5 text-rose-600" />
+                        NOTA DE RESTRICCIÓN OPERATIVA — LEY 29338 & D.S. N.° 020-2025-MIDAGRI
+                      </span>
+                      <p className="text-[11px] text-rose-700 leading-relaxed">
+                        <strong>Apertura no permitida:</strong> Todo nuevo usuario del padrón debe contar obligatoriamente con la vinculación formal de su <strong>Predio (Unidad Catastral)</strong> y el <strong>Área Bajo Riego (ha)</strong> según dicha UC. Ambos datos están estrictamente entrelazados; si no se selecciona o no se define un área bajo riego válida mayor a 0 ha, el sistema no autorizará la apertura del usuario agrario.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Checklist of missing constraints */}
+                  <div className="pt-1.5 border-t border-rose-200/80 flex flex-wrap items-center gap-2 text-[10px] font-mono">
+                    <span
+                      className={`px-2 py-0.5 rounded-md font-semibold ${
+                        tieneUcValida ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-200 text-rose-900 font-bold'
+                      }`}
+                    >
+                      {tieneUcValida ? '✓ Unidad Catastral (UC) Definida' : '✗ Falta Seleccionar / Asignar UC'}
+                    </span>
+                    <span
+                      className={`px-2 py-0.5 rounded-md font-semibold ${
+                        tieneAreaRiegoValida ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-200 text-rose-900 font-bold'
+                      }`}
+                    >
+                      {tieneAreaRiegoValida
+                        ? `✓ Área Bajo Riego Válida (${areaRiegoNumero} ha)`
+                        : '✗ Falta Ingresar Área Bajo Riego (> 0 ha)'}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-900 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <div>
+                      <span className="font-bold text-[11px] text-emerald-800 block">
+                        ✓ Vinculación Catastral Conforme — Apertura Habilitada
+                      </span>
+                      <span className="text-[10px] text-emerald-700">
+                        Predio {ucNombreResumen} entrelazado exitosamente con {areaRiegoNumero} ha bajo riego ({porcentajeAprovechamiento}% del área total).
+                      </span>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-mono">
+                    Habilitado
+                  </span>
+                </div>
+              )}
+
+              {/* Acciones del Modal */}
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setShowNuevoUsuarioModal(false)}
-                  className="px-3.5 py-1.5 rounded-xl border border-slate-200 text-slate-600 font-semibold"
+                  onClick={() => {
+                    setShowNuevoUsuarioModal(false);
+                    resetFormulario();
+                  }}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-semibold hover:bg-slate-50 transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 rounded-xl bg-slate-900 text-white font-semibold"
+                  disabled={!puedeAperturarUsuario}
+                  className={`px-4 py-2 rounded-xl font-semibold text-xs flex items-center gap-1.5 transition-all shadow-xs ${
+                    puedeAperturarUsuario
+                      ? 'bg-slate-900 hover:bg-slate-800 text-white cursor-pointer'
+                      : 'bg-slate-200 text-slate-400 cursor-not-allowed border border-slate-300'
+                  }`}
+                  title={
+                    !puedeAperturarUsuario
+                      ? 'Complete todos los campos requeridos y el entrelazamiento catastral para habilitar'
+                      : 'Aperturar y registrar usuario en el padrón'
+                  }
                 >
-                  Guardar en Padrón
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>
+                    {puedeAperturarUsuario ? 'Aperturar y Guardar Usuario en Padrón' : 'Apertura Bloqueada (Complete UC y Área de Riego)'}
+                  </span>
                 </button>
               </div>
             </form>
