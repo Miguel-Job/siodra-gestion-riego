@@ -16,7 +16,8 @@ import {
   Plus,
   Droplets,
   LogOut,
-  UserCheck
+  UserCheck,
+  Menu
 } from 'lucide-react';
 import { Ambito, FichaIntegral360Data, AuthUser } from '../types';
 import { AMBITOS_DEMO, USUARIOS_DEMO, PREDIOS_DEMO, DUAS_DEMO, TOMAS_DEMO, getFichaIntegralPorUsuario } from '../data/mockData';
@@ -33,6 +34,7 @@ interface NavbarProps {
   onOpenNuevoTurno?: () => void;
   currentUser?: AuthUser;
   onLogout?: () => void;
+  onToggleSidebar?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -46,7 +48,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenPresentacion,
   onOpenNuevoTurno,
   currentUser,
-  onLogout
+  onLogout,
+  onToggleSidebar
 }) => {
   const [ambitoDropdownOpen, setAmbitoDropdownOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -111,33 +114,47 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   return (
-    <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-5 sm:px-6 shrink-0 z-30 shadow-xs relative">
-      {/* Global Search Bar (Sleek pill style) */}
-      <div className="flex-1 max-w-xl relative">
-        <div className="relative flex items-center">
-          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-            <Search className="w-4 h-4 text-slate-400" />
+    <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-3 sm:px-6 shrink-0 z-30 shadow-xs relative">
+      {/* Left controls: Toggle button with bars & Global Search Bar */}
+      <div className="flex items-center gap-2 flex-1 max-w-xl">
+        {onToggleSidebar && (
+          <button
+            id="btn-toggle-sidebar-barras"
+            onClick={onToggleSidebar}
+            className="p-2 -ml-1 sm:ml-0 rounded-xl text-slate-700 hover:text-slate-900 hover:bg-slate-100 active:bg-slate-200 border border-slate-200/80 sm:border-transparent transition-all focus:outline-none shrink-0"
+            title="Despejar o mostrar menú de navegación"
+            aria-label="Alternar menú lateral"
+          >
+            <Menu className="w-5 h-5 text-slate-700" />
+          </button>
+        )}
+
+        {/* Global Search Bar (Sleek pill style) */}
+        <div className="flex-1 relative">
+          <div className="relative flex items-center">
+            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+              <Search className="w-4 h-4 text-slate-400" />
+            </div>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => {
+                setSearchQuery(e.target.value);
+                setSearchDropdownOpen(true);
+              }}
+              onFocus={() => setSearchDropdownOpen(true)}
+              placeholder="Búsqueda Global (Usuario, UC, DUA, Toma, Conducción...)"
+              className="w-full pl-10 pr-9 py-2 bg-slate-100 border border-transparent focus:border-emerald-500/40 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 rounded-full text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 outline-none transition-all shadow-xs font-sans"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={e => {
-              setSearchQuery(e.target.value);
-              setSearchDropdownOpen(true);
-            }}
-            onFocus={() => setSearchDropdownOpen(true)}
-            placeholder="Búsqueda Global (Usuario, UC, DUA, Toma, Conducción...)"
-            className="w-full pl-10 pr-9 py-2 bg-slate-100 border border-transparent focus:border-emerald-500/40 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 rounded-full text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 outline-none transition-all shadow-xs font-sans"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-3 text-slate-400 hover:text-slate-600"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
-        </div>
 
         {/* Live Universal Search Dropdown */}
         {searchDropdownOpen && searchQuery.trim().length > 1 && (
@@ -257,6 +274,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         )}
       </div>
+    </div>
 
       {/* Right Controls & Ambito Information */}
       <div className="flex items-center gap-3 sm:gap-4 ml-4">
@@ -347,68 +365,86 @@ export const Navbar: React.FC<NavbarProps> = ({
           )}
         </div>
 
-        {/* Current User Profile & Logout */}
+        {/* Current User Profile & Logout - Opciones de ingreso y salir al inicio */}
         {currentUser && (
-          <div className="relative">
-            <button
-              onClick={() => setUserMenuOpen(!userMenuOpen)}
-              className="flex items-center gap-2 pl-2 pr-2.5 py-1 rounded-xl bg-slate-100 hover:bg-slate-200/70 border border-slate-200 transition-colors text-left"
-              title="Cuenta de Usuario"
-            >
-              <div className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center text-xs font-bold shadow-xs shrink-0">
-                {currentUser.avatarInitials}
-              </div>
-              <div className="hidden md:block">
-                <p className="text-xs font-bold text-slate-900 leading-tight">
-                  {currentUser.nombreCompleto}
-                </p>
-                <p className="text-[10px] text-slate-500 leading-tight">
-                  {currentUser.cargo}
-                </p>
-              </div>
-              <ChevronDown className="w-3.5 h-3.5 text-slate-400 hidden sm:block shrink-0" />
-            </button>
+          <div className="flex items-center gap-1.5">
+            <div className="relative">
+              <button
+                id="btn-navbar-usuario"
+                onClick={() => setUserMenuOpen(!userMenuOpen)}
+                className="flex items-center gap-2 pl-2 pr-2.5 py-1 rounded-xl bg-slate-100 hover:bg-slate-200/70 border border-slate-200 transition-colors text-left cursor-pointer"
+                title="Usuario activo - Opciones de ingreso"
+              >
+                <div className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center text-xs font-bold shadow-xs shrink-0">
+                  {currentUser.avatarInitials}
+                </div>
+                <div className="hidden sm:block">
+                  <p className="text-xs font-bold text-slate-900 leading-tight">
+                    {currentUser.nombreCompleto}
+                  </p>
+                  <p className="text-[10px] text-slate-500 leading-tight">
+                    {currentUser.cargo}
+                  </p>
+                </div>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              </button>
 
-            {userMenuOpen && (
-              <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl border border-slate-200 shadow-xl p-3 z-50 text-xs animate-in fade-in zoom-in-95">
-                <div className="pb-2 border-b border-slate-100 mb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center text-xs font-bold shrink-0">
-                      {currentUser.avatarInitials}
+              {userMenuOpen && (
+                <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl border border-slate-200 shadow-xl p-3 z-50 text-xs animate-in fade-in zoom-in-95">
+                  <div className="pb-2 border-b border-slate-100 mb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center text-xs font-bold shrink-0">
+                        {currentUser.avatarInitials}
+                      </div>
+                      <div className="overflow-hidden">
+                        <p className="font-bold text-slate-900 truncate">{currentUser.nombreCompleto}</p>
+                        <p className="text-[11px] text-slate-500 truncate">{currentUser.email}</p>
+                      </div>
                     </div>
-                    <div className="overflow-hidden">
-                      <p className="font-bold text-slate-900 truncate">{currentUser.nombreCompleto}</p>
-                      <p className="text-[11px] text-slate-500 truncate">{currentUser.email}</p>
+                    <div className="mt-2 pt-2 border-t border-slate-50 flex items-center justify-between text-[11px] text-slate-600">
+                      <span>Rol:</span>
+                      <span className="font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+                        {currentUser.rol}
+                      </span>
                     </div>
                   </div>
-                  <div className="mt-2 pt-2 border-t border-slate-50 flex items-center justify-between text-[11px] text-slate-600">
-                    <span>Rol:</span>
-                    <span className="font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
-                      {currentUser.rol}
-                    </span>
+
+                  <div className="space-y-1">
+                    <div className="px-2 py-1.5 text-[11px] text-slate-500 bg-slate-50 rounded-lg">
+                      <span>Comisión: </span>
+                      <strong className="text-slate-800 font-semibold">{currentUser.comision}</strong>
+                    </div>
+
+                    {onLogout && (
+                      <button
+                        id="btn-menu-salir-inicio"
+                        onClick={() => {
+                          setUserMenuOpen(false);
+                          onLogout();
+                        }}
+                        className="w-full mt-2 flex items-center justify-center gap-2 px-2.5 py-2 text-xs font-bold text-red-700 bg-red-50 hover:bg-red-100 rounded-lg transition-colors border border-red-200 cursor-pointer"
+                        title="Salir hacia el inicio de la aplicación"
+                      >
+                        <LogOut className="w-4 h-4 text-red-600" />
+                        <span>Salir hacia el inicio</span>
+                      </button>
+                    )}
                   </div>
                 </div>
+              )}
+            </div>
 
-                <div className="space-y-1">
-                  <div className="px-2 py-1.5 text-[11px] text-slate-500 bg-slate-50 rounded-lg">
-                    <span>Comisión: </span>
-                    <strong className="text-slate-800 font-semibold">{currentUser.comision}</strong>
-                  </div>
-
-                  {onLogout && (
-                    <button
-                      onClick={() => {
-                        setUserMenuOpen(false);
-                        onLogout();
-                      }}
-                      className="w-full mt-2 flex items-center gap-2 px-2.5 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                    >
-                      <LogOut className="w-4 h-4" />
-                      <span>Cerrar Sesión</span>
-                    </button>
-                  )}
-                </div>
-              </div>
+            {/* Botón directo para salir al inicio de la aplicación */}
+            {onLogout && (
+              <button
+                id="btn-navbar-salir-directo"
+                onClick={onLogout}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 active:bg-red-200 text-red-700 border border-red-200 text-xs font-bold transition-all shadow-2xs shrink-0 cursor-pointer"
+                title="Salir hacia el inicio de la aplicación"
+              >
+                <LogOut className="w-3.5 h-3.5 text-red-600" />
+                <span className="hidden sm:inline">Salir</span>
+              </button>
             )}
           </div>
         )}

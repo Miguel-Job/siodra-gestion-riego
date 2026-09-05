@@ -65,6 +65,18 @@ export default function App() {
   // Notifications banner
   const [notificacion, setNotificacion] = useState<string | null>(null);
 
+  // Responsive sidebar toggles (despejar / abrir barra azul)
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isDesktopSidebarVisible, setIsDesktopSidebarVisible] = useState(true);
+
+  const handleToggleSidebar = () => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setIsMobileSidebarOpen(prev => !prev);
+    } else {
+      setIsDesktopSidebarVisible(prev => !prev);
+    }
+  };
+
   const mostrarNotificacion = (mensaje: string) => {
     setNotificacion(mensaje);
     setTimeout(() => {
@@ -146,6 +158,7 @@ export default function App() {
         onSelectAmbito={setSelectedAmbito}
         currentUser={currentUser}
         onLogout={handleLogout}
+        onToggleSidebar={handleToggleSidebar}
         onSelectFicha={(ficha) => {
           setSelectedFicha(ficha);
           setIsFichaModalOpen(true);
@@ -156,18 +169,34 @@ export default function App() {
       />
 
       {/* Main Layout Area: Sidebar + Content */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left Sidebar Navigation */}
+      <div className="flex-1 flex overflow-hidden relative">
+        {/* Mobile backdrop overlay to close/despejar sidebar when tapping outside */}
+        {isMobileSidebarOpen && (
+          <div
+            id="sidebar-mobile-backdrop"
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-30 md:hidden animate-in fade-in duration-200"
+            onClick={() => setIsMobileSidebarOpen(false)}
+            aria-hidden="true"
+          />
+        )}
+
+        {/* Left Sidebar Navigation (Franja azul colapsable / desplegable) */}
         <Sidebar
           currentTab={currentTab}
-          onTabChange={setCurrentTab}
+          onTabChange={(tab) => {
+            setCurrentTab(tab);
+            setIsMobileSidebarOpen(false);
+          }}
           currentUser={currentUser}
           onLogout={handleLogout}
           onOpenPresentacion={() => setIsPresentacionModalOpen(true)}
+          isOpen={isMobileSidebarOpen}
+          onClose={() => setIsMobileSidebarOpen(false)}
+          isDesktopVisible={isDesktopSidebarVisible}
         />
 
         {/* Center Scrollable Work Area */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-7 max-w-7xl mx-auto w-full space-y-5">
+        <main className="flex-1 overflow-y-auto p-3.5 sm:p-5 md:p-6 lg:p-7 max-w-7xl mx-auto w-full min-w-0 space-y-4 sm:space-y-5">
           {/* Notification Toast */}
           {notificacion && (
             <div className="p-3.5 bg-emerald-900 text-white rounded-2xl flex items-center justify-between shadow-lg animate-in fade-in slide-in-from-top-2 text-xs font-medium">

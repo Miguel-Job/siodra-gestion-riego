@@ -14,7 +14,8 @@ import {
   Settings,
   RefreshCw,
   FileSpreadsheet,
-  LogOut
+  LogOut,
+  X
 } from 'lucide-react';
 import { AuthUser } from '../types';
 
@@ -26,6 +27,9 @@ interface SidebarProps {
   onResetDemoData?: () => void;
   currentUser?: AuthUser;
   onLogout?: () => void;
+  isOpen?: boolean;
+  onClose?: () => void;
+  isDesktopVisible?: boolean;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -35,11 +39,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenPresentacion,
   onResetDemoData,
   currentUser,
-  onLogout
+  onLogout,
+  isOpen = false,
+  onClose,
+  isDesktopVisible = true
 }) => {
   const handleNav = (tab: string) => {
     if (onTabChange) onTabChange(tab);
     if (setCurrentTab) setCurrentTab(tab);
+    if (onClose) onClose();
   };
 
   const navAreas = [
@@ -50,20 +58,45 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   return (
-    <aside className="w-64 bg-[#0F172A] text-slate-300 flex flex-col shrink-0 border-r border-slate-800 select-none">
+    <aside
+      id="sidebar-navegacion"
+      className={`
+        w-64 bg-[#0F172A] text-slate-300 flex flex-col shrink-0 border-r border-slate-800 select-none
+        transition-transform duration-200 ease-in-out z-40
+        fixed inset-y-0 left-0 h-full
+        md:static md:h-auto
+        ${isOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full md:translate-x-0'}
+        ${isDesktopVisible ? 'md:flex' : 'md:hidden'}
+      `}
+    >
       {/* Brand Header */}
-      <div className="p-5 border-b border-slate-800">
-        <div className="flex items-center gap-2.5 mb-1">
-          <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center text-white font-black text-lg shadow-sm shadow-emerald-500/30">
-            S
+      <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between">
+        <div>
+          <div className="flex items-center gap-2.5 mb-1">
+            <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center text-white font-black text-lg shadow-sm shadow-emerald-500/30">
+              S
+            </div>
+            <span className="text-xl font-extrabold text-white tracking-tight font-sans">
+              SIODRA
+            </span>
           </div>
-          <span className="text-xl font-extrabold text-white tracking-tight font-sans">
-            SIODRA
-          </span>
+          <p className="text-[10px] uppercase tracking-widest text-slate-400 font-semibold pl-0.5">
+            Recursos Hídricos Agrarios
+          </p>
         </div>
-        <p className="text-[10px] uppercase tracking-widest text-slate-400 font-semibold pl-0.5">
-          Recursos Hídricos Agrarios
-        </p>
+
+        {/* Botón para despejar / cerrar la barra azul en dispositivos móviles */}
+        {onClose && (
+          <button
+            id="btn-despejar-sidebar"
+            onClick={onClose}
+            className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 md:hidden transition-colors focus:outline-none"
+            title="Despejar barra lateral"
+            aria-label="Cerrar barra lateral"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        )}
       </div>
 
       {/* Navigation Groups */}
@@ -147,43 +180,46 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </button>
       </nav>
 
-      {/* Bottom User Card */}
+      {/* Bottom User Card - Opción de Ingreso y Salir al Inicio */}
       <div className="p-3 border-t border-slate-800 space-y-2">
-        <div className="flex items-center justify-between p-2 bg-slate-800/50 rounded-lg border border-slate-700/50">
-          <div className="flex items-center gap-2.5 overflow-hidden">
-            <div className="w-8 h-8 rounded-full bg-emerald-700/60 border border-emerald-500/30 flex items-center justify-center text-xs font-bold text-white uppercase shadow-xs shrink-0">
-              {currentUser?.avatarInitials || 'CR'}
+        <div className="p-2.5 bg-slate-800/70 rounded-xl border border-slate-700/60 flex flex-col gap-2">
+          <div className="flex items-center justify-between gap-2 overflow-hidden">
+            <div className="flex items-center gap-2.5 overflow-hidden">
+              <div className="w-8 h-8 rounded-full bg-emerald-600 border border-emerald-400/40 flex items-center justify-center text-xs font-bold text-white uppercase shadow-xs shrink-0">
+                {currentUser?.avatarInitials || 'CR'}
+              </div>
+              <div className="truncate">
+                <p className="text-xs font-bold text-white leading-tight truncate">
+                  {currentUser?.nombreCompleto || 'Ing. Carlos Ramírez'}
+                </p>
+                <p className="text-[10px] text-slate-400 truncate">
+                  {currentUser?.cargo || 'Sectorista OUA'}
+                </p>
+              </div>
             </div>
-            <div className="truncate">
-              <p className="text-xs font-bold text-white leading-tight truncate">
-                {currentUser?.nombreCompleto || 'Ing. Carlos Ramírez'}
-              </p>
-              <p className="text-[10px] text-slate-400 truncate">
-                {currentUser?.cargo || 'Sectorista OUA'}
-              </p>
-            </div>
-          </div>
 
-          <div className="flex items-center gap-1 shrink-0">
             {onResetDemoData && (
               <button
                 onClick={onResetDemoData}
                 title="Restablecer Datos Demo"
-                className="p-1.5 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-700/60 transition-colors"
+                className="p-1 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-700/60 transition-colors shrink-0"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
               </button>
             )}
-            {onLogout && (
-              <button
-                onClick={onLogout}
-                title="Cerrar sesión"
-                className="p-1.5 rounded-md text-red-400/80 hover:text-red-300 hover:bg-red-500/10 transition-colors"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-              </button>
-            )}
           </div>
+
+          {onLogout && (
+            <button
+              id="btn-sidebar-salir-inicio"
+              onClick={onLogout}
+              className="w-full flex items-center justify-center gap-2 px-2.5 py-1.5 rounded-lg bg-red-500/15 hover:bg-red-500/25 active:bg-red-500/35 text-red-200 border border-red-500/30 text-xs font-semibold transition-all group cursor-pointer"
+              title="Salir hacia el inicio de la aplicación"
+            >
+              <LogOut className="w-3.5 h-3.5 text-red-400 group-hover:scale-105 transition-transform" />
+              <span>Salir al inicio</span>
+            </button>
+          )}
         </div>
       </div>
     </aside>
