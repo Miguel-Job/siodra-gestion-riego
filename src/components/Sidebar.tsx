@@ -179,49 +179,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <span>Configuración & Tarifas</span>
         </button>
       </nav>
-
-      {/* Bottom User Card - Opción de Ingreso y Salir al Inicio */}
-      <div className="p-3 border-t border-slate-800 space-y-2">
-        <div className="p-2.5 bg-slate-800/70 rounded-xl border border-slate-700/60 flex flex-col gap-2">
-          <div className="flex items-center justify-between gap-2 overflow-hidden">
-            <div className="flex items-center gap-2.5 overflow-hidden">
-              <div className="w-8 h-8 rounded-full bg-emerald-600 border border-emerald-400/40 flex items-center justify-center text-xs font-bold text-white uppercase shadow-xs shrink-0">
-                {currentUser?.avatarInitials || 'CR'}
-              </div>
-              <div className="truncate">
-                <p className="text-xs font-bold text-white leading-tight truncate">
-                  {currentUser?.nombreCompleto || 'Ing. Carlos Ramírez'}
-                </p>
-                <p className="text-[10px] text-slate-400 truncate">
-                  {currentUser?.cargo || 'Sectorista OUA'}
-                </p>
-              </div>
-            </div>
-
-            {onResetDemoData && (
-              <button
-                onClick={onResetDemoData}
-                title="Restablecer Datos Demo"
-                className="p-1 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-700/60 transition-colors shrink-0"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-
-          {onLogout && (
-            <button
-              id="btn-sidebar-salir-inicio"
-              onClick={onLogout}
-              className="w-full flex items-center justify-center gap-2 px-2.5 py-1.5 rounded-lg bg-red-500/15 hover:bg-red-500/25 active:bg-red-500/35 text-red-200 border border-red-500/30 text-xs font-semibold transition-all group cursor-pointer"
-              title="Salir hacia el inicio de la aplicación"
-            >
-              <LogOut className="w-3.5 h-3.5 text-red-400 group-hover:scale-105 transition-transform" />
-              <span>Salir al inicio</span>
-            </button>
-          )}
-        </div>
-      </div>
     </aside>
   );
 };

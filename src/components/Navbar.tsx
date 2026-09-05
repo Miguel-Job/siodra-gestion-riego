@@ -414,21 +414,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                       <span>Comisión: </span>
                       <strong className="text-slate-800 font-semibold">{currentUser.comision}</strong>
                     </div>
-
-                    {onLogout && (
-                      <button
-                        id="btn-menu-salir-inicio"
-                        onClick={() => {
-                          setUserMenuOpen(false);
-                          onLogout();
-                        }}
-                        className="w-full mt-2 flex items-center justify-center gap-2 px-2.5 py-2 text-xs font-bold text-red-700 bg-red-50 hover:bg-red-100 rounded-lg transition-colors border border-red-200 cursor-pointer"
-                        title="Salir hacia el inicio de la aplicación"
-                      >
-                        <LogOut className="w-4 h-4 text-red-600" />
-                        <span>Salir hacia el inicio</span>
-                      </button>
-                    )}
                   </div>
                 </div>
               )}
